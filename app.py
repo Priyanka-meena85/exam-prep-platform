@@ -682,33 +682,53 @@ def test_setup():
             else:
                 query += ' AND 1=0'
 
-        # Strictly exclude already attempted question IDs from this query
-        if attempted_ids:
-            placeholders = ','.join('?' for _ in attempted_ids)
-            query += f' AND q.id NOT IN ({placeholders})'
-            params.extend(attempted_ids)
-
-        # Execute query
+        # Execute query to get all matching questions (both new and attempted)
         all_qs = db.execute(query, params).fetchall()
 
-        # Remove duplicate questions (based on normalized text)
-        seen_texts = set()
-        unique_qs = []
+        # Separate into new (unattempted) and already attempted candidates
+        attempted_set = set(attempted_ids)
+        new_candidates = []
+        attempted_candidates = []
         for q in all_qs:
+            if q['id'] in attempted_set:
+                attempted_candidates.append(q)
+            else:
+                new_candidates.append(q)
+
+        # Remove duplicate questions (based on normalized text), prioritizing new ones
+        seen_texts = set()
+        unique_new = []
+        for q in new_candidates:
             norm_text = "".join(c for c in q['question_text'].lower() if c.isalnum())
             if norm_text not in seen_texts:
                 seen_texts.add(norm_text)
-                unique_qs.append(q)
-        all_qs = unique_qs
+                unique_new.append(q)
 
-        # Enforce strict validation
-        if len(all_qs) < num_qs:
-            error = "Not enough new questions available for this subject/topic."
-            return render_template('test_setup.html', topics=topics, subjects=subjects, error=error, form_data=request.form)
+        unique_attempted = []
+        for q in attempted_candidates:
+            norm_text = "".join(c for c in q['question_text'].lower() if c.isalnum())
+            if norm_text not in seen_texts:
+                seen_texts.add(norm_text)
+                unique_attempted.append(q)
 
-        # Randomly sample the requested number of questions
-        selected = random.sample(list(all_qs), num_qs)
+        # Determine how to sample the requested number of questions
+        if len(unique_new) >= num_qs:
+            selected = random.sample(unique_new, num_qs)
+        else:
+            selected = list(unique_new)
+            needed = num_qs - len(selected)
+            if len(unique_attempted) >= needed:
+                selected += random.sample(unique_attempted, needed)
+            else:
+                selected += list(unique_attempted)
+
+        # Shuffle selected questions to randomize order of new and attempted questions
         random.shuffle(selected)
+
+        # Enforce validation only if no questions at all were found
+        if not selected:
+            error = "Not enough questions available for this subject/topic."
+            return render_template('test_setup.html', topics=topics, subjects=subjects, error=error, form_data=request.form)
 
         # Determine descriptive name for the test
         test_name = "Mock Test"
