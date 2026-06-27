@@ -9,10 +9,32 @@ from flask_session import Session
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "flask_session")
-Session(app)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'data', 'exam_prep.db')
+
+# Check if running in Vercel or other Serverless / Read-Only environment
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    # Vercel Serverless environment uses writable /tmp directory
+    SESSION_FILE_DIR = "/tmp/flask_session"
+    DB_PATH = "/tmp/exam_prep.db"
+    
+    # Ensure directories exist
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    os.makedirs(SESSION_FILE_DIR, exist_ok=True)
+    
+    # Copy pre-existing SQLite database from repository build to /tmp
+    original_db = os.path.join(BASE_DIR, 'data', 'exam_prep.db')
+    if os.path.exists(original_db) and not os.path.exists(DB_PATH):
+        try:
+            shutil.copy2(original_db, DB_PATH)
+        except Exception as e:
+            print(f"Error copying database to /tmp: {e}")
+else:
+    SESSION_FILE_DIR = os.path.join(BASE_DIR, "data", "flask_session")
+    DB_PATH = os.path.join(BASE_DIR, 'data', 'exam_prep.db')
+
+app.config["SESSION_FILE_DIR"] = SESSION_FILE_DIR
+Session(app)
 
 # ─── Database Setup ───────────────────────────────────────────
 def get_db():
@@ -1447,10 +1469,14 @@ Provide a clear, exam-focused answer. Reference study material and Rajasthan-spe
     return jsonify({'response': response})
 
 # ─── Initialize ───────────────────────────────────────────────
-if __name__ == '__main__':
+# Always initialize the database and seed data on startup (especially important on Vercel/lambda environments)
+try:
     init_db()
-    try: seed_data()
-    except: pass
+    seed_data()
+except Exception as e:
+    print(f"Error initializing/seeding database: {e}")
+
+if __name__ == '__main__':
     print("\n+------------------------------------------------------+")
     print("|   Computer Anudeshak Exam Prep Platform v1.0         |")
     print("|   Running at: http://localhost:5050                  |")
