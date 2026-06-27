@@ -1,7 +1,0 @@
-[tool.pyrefly]
-project-excludes = [
-    "c:/__pyrefly_virtual__/**/*",
-    "c:/__pyrefly_virtual__",
-    "**/__pyrefly_virtual__/**/*",
-    "**/__pyrefly_virtual__"
-]
