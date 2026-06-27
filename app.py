@@ -1502,4 +1502,4 @@ if __name__ == '__main__':
     print("|   Running at: http://localhost:5050                  |")
     print("|   Diagnostic-First Method Engine                     |")
     print("+------------------------------------------------------+\n")
-    app.run(debug=False, port=5050, host='127.0.0.1')
+    app.run(debug=True, port=5050, host='127.0.0.1')
